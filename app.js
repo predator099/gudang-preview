@@ -41,6 +41,14 @@ let curUser = null;
 // SEED DATA
 // ──────────────────────────────────────────
 function seedData() {
+  // Hanya seed SEKALI saat pertama kali aplikasi dijalankan (belum pernah ada install).
+  // Sebelumnya kode ini cek "if (!barang.length)" / "if (!kategoriList.length)" yang
+  // menyebabkan data demo muncul lagi setiap kali semua barang/kategori dihapus habis,
+  // bahkan saat refresh biasa. Sekarang dipakai flag terpisah agar array kosong
+  // (karena memang sengaja dihapus semua oleh user) tidak ditimpa ulang.
+  const alreadySeeded = localStorage.getItem('sg2_seeded') === '1';
+  if (alreadySeeded) return;
+
   if (!barang.length) {
     barang = [
       {kode:'BRG-001',nama:'ONT Huawei HG8245H5',kategori:'Ont/Modem',satuan:'Pcs',stok:20,min:5,harga:350000,lokasi:'Rak A-1',ket:'GPON'},
@@ -74,6 +82,7 @@ function seedData() {
       'Kabel lan 1m','Kabel fiber 1 core','Kabel fiber 4 core','Kabel precon'
     ];
   }
+  localStorage.setItem('sg2_seeded', '1');
   save();
   addAct('Sistem','Data awal dimuat','init');
 }
@@ -166,6 +175,7 @@ function doLogin() {
   const found = users.find(x => x.username===u && x.password===p && x.aktif);
   if (found) {
     curUser = normalizePerms(found);
+    localStorage.setItem('sg2_session', curUser.id); // simpan sesi agar tidak logout saat refresh
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     applyUserUI();
@@ -183,11 +193,26 @@ function doLogout() {
   addAct(curUser.nama, 'Logout dari sistem', 'logout');
   save();
   curUser = null;
+  localStorage.removeItem('sg2_session'); // hapus sesi agar refresh kembali ke login
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
   document.getElementById('l-user').value = '';
   document.getElementById('l-pass').value = '';
   document.getElementById('login-err').style.display = 'none';
+}
+
+// Coba pulihkan sesi login yang tersimpan (dipanggil saat aplikasi pertama dimuat)
+function restoreSession() {
+  const savedId = localStorage.getItem('sg2_session');
+  if (!savedId) return false;
+  const found = users.find(x => x.id === savedId && x.aktif);
+  if (!found) { localStorage.removeItem('sg2_session'); return false; }
+  curUser = normalizePerms(found);
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  applyUserUI();
+  renderAll();
+  return true;
 }
 
 document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
@@ -1777,5 +1802,6 @@ applyTheme();
 seedData();
 katAttr = JSON.parse(localStorage.getItem('sg2_katattr') || '{}');
 document.getElementById('login-year').textContent = new Date().getFullYear();
+restoreSession(); // pulihkan sesi login jika ada, agar tidak selalu kembali ke halaman login saat refresh
 window.addEventListener('resize',()=>{ if(document.getElementById('app').style.display!=='none') renderDashboard(); });
 document.querySelector('[onclick="openModal(\'m-adduser\')"]').setAttribute('onclick','openAddUser()');
