@@ -41,12 +41,22 @@ let curUser = null;
 // SEED DATA
 // ──────────────────────────────────────────
 function seedData() {
-  // Hanya seed SEKALI saat pertama kali aplikasi dijalankan (belum pernah ada install).
-  // Sebelumnya kode ini cek "if (!barang.length)" / "if (!kategoriList.length)" yang
-  // menyebabkan data demo muncul lagi setiap kali semua barang/kategori dihapus habis,
-  // bahkan saat refresh biasa. Sekarang dipakai flag terpisah agar array kosong
-  // (karena memang sengaja dihapus semua oleh user) tidak ditimpa ulang.
   const alreadySeeded = localStorage.getItem('sg2_seeded') === '1';
+
+  // Selalu pastikan ada user, meski sudah pernah seed.
+  // Ini fix kondisi di mana sg2_seeded=1 tapi sg2_usr kosong/corrupt.
+  if (!users.length) {
+    users = [
+      { id:'u1', nama:'Super Admin', username:'admin', password:'admin123', email:'admin@gudang.id', role:'admin', aktif:true,
+        perms:{view:true,add:true,edit:true,delete:true,masuk:true,keluar:true,laporan:true,export:true}, tgl: now() },
+      { id:'u2', nama:'Budi Santoso', username:'operator1', password:'op123', email:'budi@gudang.id', role:'operator', aktif:true,
+        perms:{view:true,add:false,edit:false,delete:false,masuk:false,keluar:false,laporan:false,export:false}, tgl: now() },
+      { id:'u3', nama:'Sari Dewi', username:'supervisor1', password:'spv123', email:'sari@gudang.id', role:'supervisor', aktif:true,
+        perms:{view:true,add:true,edit:true,delete:false,masuk:true,keluar:true,laporan:true,export:true}, tgl: now() },
+    ];
+    localStorage.setItem('sg2_usr', JSON.stringify(users));
+  }
+
   if (alreadySeeded) return;
 
   if (!barang.length) {
@@ -390,11 +400,18 @@ function updateBrgSelectCount() {
   }
 }
 
-function hapusBrgSelected() {
+async function hapusBrgSelected() {
   if (!canDo('delete')) { showToast('Anda tidak punya izin hapus', 'error'); return; }
   if (selectedBrg.size === 0) return;
   const names = [...selectedBrg].map(k => barang.find(b=>b.kode===k)?.nama).filter(Boolean);
-  if (!confirm(`Hapus ${selectedBrg.size} barang berikut?\n\n${names.join('\n')}\n\nTindakan ini tidak bisa dibatalkan.`)) return;
+  const ok = await showConfirm({
+    title: `Hapus ${names.length} barang?`,
+    msg: 'Tindakan ini tidak dapat dibatalkan.',
+    list: names,
+    okLabel: `Hapus ${names.length} Barang`,
+    okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!ok) return;
   [...selectedBrg].forEach(k => {
     const b = barang.find(x=>x.kode===k);
     if (b) addAct(b.nama, 'Barang dihapus', 'hapus');
@@ -784,7 +801,7 @@ function updateSelectCount() {
   btn.style.opacity = n === 0 ? '.45' : '1';
 }
 
-function hapusSelected() {
+async function hapusSelected() {
   if (selectedIds.size === 0) return;
   // Cek admin protection
   const willDeleteAdmins = [...selectedIds].filter(id => users.find(u=>u.id===id)?.role==='admin').length;
@@ -793,7 +810,14 @@ function hapusSelected() {
     showToast('Tidak bisa hapus semua admin — harus ada minimal 1 admin!', 'error'); return;
   }
   const names = [...selectedIds].map(id => users.find(u=>u.id===id)?.nama).filter(Boolean);
-  if (!confirm(`Hapus ${selectedIds.size} pengguna berikut?\n\n${names.join(', ')}\n\nTindakan ini tidak bisa dibatalkan.`)) return;
+  const okU = await showConfirm({
+    title: `Hapus ${names.length} pengguna?`,
+    msg: 'Tindakan ini tidak dapat dibatalkan.',
+    list: names,
+    okLabel: `Hapus ${names.length} User`,
+    okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!okU) return;
   [...selectedIds].forEach(id => {
     const u = users.find(x=>x.id===id);
     if (u) addAct(curUser.nama, `Hapus user: ${u.username}`, 'hapus');
@@ -1193,10 +1217,15 @@ function saveAttrFields() {
   renderFieldRows();
 }
 
-function resetAttrFields() {
+async function resetAttrFields() {
   const kat = window._editKat;
   if (!kat) return;
-  if (!confirm(`Reset atribut "${kat}" ke default?`)) return;
+  const okR = await showConfirm({
+    title: 'Reset atribut ke default?',
+    msg: `Field untuk kategori "${kat}" akan dikembalikan ke pengaturan bawaan.`,
+    okLabel: 'Ya, Reset', okColor: '#d97706', iconType: 'warning'
+  });
+  if (!okR) return;
   delete katAttr[kat];
   saveKatAttr();
   window._editFields = JSON.parse(JSON.stringify(KATEGORI_FIELDS[kat] || []));
@@ -1268,10 +1297,15 @@ function editKat(idx) {
   document.getElementById('kat-input').focus();
 }
 
-function hapusKat(idx) {
+async function hapusKat(idx) {
   const k = kategoriList[idx];
   if (barang.some(b=>b.kategori===k)) { showToast('Kategori sedang dipakai!','error'); return; }
-  if (!confirm(`Hapus kategori "${k}"?`)) return;
+  const okK = await showConfirm({
+    title: 'Hapus kategori?',
+    msg: `Kategori "${k}" akan dihapus permanen.`,
+    okLabel: 'Hapus', okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!okK) return;
   kategoriList.splice(idx,1);
   delete katAttr[k]; saveKatAttr();
   saveKat(); renderKatList(); updateKatSelect();
@@ -1335,9 +1369,14 @@ function editBarang(idx) {
   openModal('m-barang');
 }
 
-function hapusBarang(idx) {
+async function hapusBarang(idx) {
   if(!canDo('delete')) { showToast('Anda tidak punya izin hapus','error'); return; }
-  if(!confirm(`Hapus barang "${barang[idx].nama}"?`)) return;
+  const okB = await showConfirm({
+    title: 'Hapus barang?',
+    msg: `"${barang[idx].nama}" akan dihapus permanen.`,
+    okLabel: 'Hapus Barang', okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!okB) return;
   addAct(barang[idx].nama,'Barang dihapus','hapus');
   barang.splice(idx,1); save(); renderAll();
   showToast('Barang berhasil dihapus','info');
@@ -1636,41 +1675,205 @@ function exportKeluar() { if(!canDo('export')){showToast('Tidak ada izin','error
 // ══════════════════════════════════════════
 // TOAST
 // ══════════════════════════════════════════
-let toastTimer=null;
-function showToast(msg, type='success') {
-  const t=document.getElementById('toast');
-  const icons = {
-    success:'<polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>',
-    error:'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="15" y1="9" x2="9" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="9" y1="9" x2="15" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-    info:'<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-  };
-  t.querySelector('svg').innerHTML=icons[type]||icons.success;
-  t.className='toast '+type;
-  document.getElementById('toast-msg').textContent=msg;
-  t.classList.add('show');
-  if(toastTimer) clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
+// ══════════════════════════════════════════
+// TOAST STACK
+// ══════════════════════════════════════════
+const TOAST_DURATION = 3500;
+const TOAST_LABELS = { success:'Berhasil', error:'Error', info:'Info', warning:'Peringatan' };
+const TOAST_ICONS = {
+  success: '<polyline points="20 6 9 17 4 12"/>',
+  error:   '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+  info:    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+  warning: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+};
+
+function showToast(msg, type = 'success') {
+  const stack = document.getElementById('toast-stack');
+  const id = 'toast-' + Date.now();
+  const dur = TOAST_DURATION;
+
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  el.id = id;
+  el.innerHTML = `
+    <div class="toast-icon-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TOAST_ICONS[type]||TOAST_ICONS.info}</svg>
+    </div>
+    <div class="toast-body">
+      <div class="toast-label">${TOAST_LABELS[type]||type}</div>
+      <div class="toast-msg">${msg}</div>
+    </div>
+    <button class="toast-close" onclick="dismissToast('${id}')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="toast-progress" style="animation-duration:${dur}ms"></div>
+  `;
+  stack.appendChild(el);
+
+  // Limit stack to 4
+  const items = stack.querySelectorAll('.toast-item:not(.removing)');
+  if (items.length > 4) dismissToast(items[0].id);
+
+  // Auto dismiss
+  setTimeout(() => dismissToast(id), dur);
 }
+
+function dismissToast(id) {
+  const el = document.getElementById(id);
+  if (!el || el.classList.contains('removing')) return;
+  el.classList.add('removing');
+  setTimeout(() => el.remove(), 280);
+}
+
+// ══════════════════════════════════════════
+// CUSTOM CONFIRM DIALOG
+// ══════════════════════════════════════════
+let _confirmResolve = null;
+
+function showConfirm({ title, msg, list = [], okLabel = 'Ya, Hapus', okColor = '#dc2626', iconType = 'danger' }) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+
+    // Icon & color
+    const iconMap = {
+      danger:  { icon: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>', bg: '#fff0f0', stroke: '#dc2626' },
+      warning: { icon: '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', bg: '#fffbf0', stroke: '#d97706' },
+      info:    { icon: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', bg: '#f0f6ff', stroke: '#2563eb' },
+    };
+    const cfg = iconMap[iconType] || iconMap.danger;
+
+    document.getElementById('confirm-icon').innerHTML = cfg.icon;
+    document.getElementById('confirm-icon').style.stroke = cfg.stroke;
+    document.getElementById('confirm-icon-wrap').style.background = cfg.bg;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+
+    const listWrap = document.getElementById('confirm-list-wrap');
+    if (list.length) {
+      document.getElementById('confirm-list').innerHTML = list.map(s => `<div>· ${s}</div>`).join('');
+      listWrap.style.display = 'block';
+    } else {
+      listWrap.style.display = 'none';
+    }
+
+    const okBtn = document.getElementById('confirm-ok-btn');
+    okBtn.textContent = okLabel;
+    okBtn.style.background = okColor;
+    okBtn.style.color = '#fff';
+
+    document.getElementById('m-confirm').classList.add('open');
+  });
+}
+
+function confirmResolve(val) {
+  document.getElementById('m-confirm').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(val); _confirmResolve = null; }
+}
+
 
 // ══════════════════════════════════════════
 // KELOLA KATEGORI
 // ══════════════════════════════════════════
+let katSelectMode = false;
+let selectedKat = new Set();
+
 function saveKat() { localStorage.setItem('sg2_kat', JSON.stringify(kategoriList)); }
+
+function katToggleSelectMode() {
+  katSelectMode = !katSelectMode;
+  selectedKat.clear();
+  const btn = document.getElementById('kat-sel-toggle-btn');
+  const allBtn = document.getElementById('kat-sel-all-btn');
+  const delBtn = document.getElementById('kat-del-sel-btn');
+  const cntEl = document.getElementById('kat-sel-count');
+  if (katSelectMode) {
+    btn.textContent = 'Batal';
+    btn.style.background = 'var(--surface3)';
+    allBtn.style.display = 'inline-block';
+    delBtn.style.display = 'none';
+    cntEl.style.display = 'inline';
+    cntEl.textContent = '0 dipilih';
+  } else {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> Pilih`;
+    btn.style.background = 'transparent';
+    allBtn.style.display = 'none';
+    delBtn.style.display = 'none';
+    cntEl.style.display = 'none';
+  }
+  renderKatList();
+}
+
+function katSelectAll() {
+  const deletable = kategoriList.filter(k => !barang.some(b => b.kategori === k));
+  if (selectedKat.size === deletable.length) {
+    selectedKat.clear(); // deselect all
+  } else {
+    deletable.forEach(k => selectedKat.add(k));
+  }
+  katUpdateSelUI();
+  renderKatList();
+}
+
+function katToggleItem(k) {
+  if (selectedKat.has(k)) selectedKat.delete(k);
+  else selectedKat.add(k);
+  katUpdateSelUI();
+  renderKatList();
+}
+
+function katUpdateSelUI() {
+  const n = selectedKat.size;
+  document.getElementById('kat-sel-count').textContent = `${n} dipilih`;
+  document.getElementById('kat-del-sel-btn').style.display = n > 0 ? 'inline-block' : 'none';
+  const deletable = kategoriList.filter(k => !barang.some(b => b.kategori === k));
+  document.getElementById('kat-sel-all-btn').textContent = selectedKat.size === deletable.length ? 'Batal Pilih Semua' : 'Pilih Semua';
+}
+
+async function hapusKatSelected() {
+  if (!selectedKat.size) return;
+  const list = [...selectedKat];
+  const ok = await showConfirm({
+    title: `Hapus ${list.length} kategori?`,
+    msg: 'Kategori yang dipilih akan dihapus permanen.',
+    list,
+    okLabel: `Hapus ${list.length} Kategori`,
+    okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!ok) return;
+  list.forEach(k => {
+    const i = kategoriList.indexOf(k);
+    if (i >= 0) { kategoriList.splice(i, 1); delete katAttr[k]; }
+  });
+  saveKatAttr(); saveKat(); updateKatSelect();
+  selectedKat.clear();
+  katSelectMode = false;
+  document.getElementById('kat-sel-toggle-btn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg> Pilih`;
+  document.getElementById('kat-sel-toggle-btn').style.background = 'transparent';
+  document.getElementById('kat-sel-all-btn').style.display = 'none';
+  document.getElementById('kat-del-sel-btn').style.display = 'none';
+  document.getElementById('kat-sel-count').style.display = 'none';
+  renderKatList();
+  showToast(`${list.length} kategori berhasil dihapus`, 'info');
+}
 
 function renderKatList() {
   const el = document.getElementById('kat-list');
   if (!kategoriList.length) { el.innerHTML='<div class="empty" style="padding:1rem"><p>Belum ada kategori</p></div>'; return; }
   el.innerHTML = kategoriList.map((k,i) => {
     const used = barang.some(b => b.kategori === k);
-    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-radius:8px;border:1px solid var(--border);margin-bottom:.4rem;background:var(--surface2)">
+    const checked = selectedKat.has(k);
+    const canDelete = !used;
+    return `<div style="display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-radius:8px;border:1.5px solid ${checked ? 'var(--primary)' : 'var(--border)'};margin-bottom:.4rem;background:${checked ? 'var(--blue-bg)' : 'var(--surface2)'};transition:all .15s">
+      ${katSelectMode ? `<input type="checkbox" class="kat-item-cb" ${checked?'checked':''} ${!canDelete?'disabled title="Dipakai, tidak bisa dihapus"':''} onchange="katToggleItem('${k.replace(/'/g,"\\'")}')">` : ''}
       <span style="flex:1;font-size:.875rem;color:var(--text);font-weight:500">${k}</span>
       ${used ? '<span class="badge b-blue" style="font-size:.65rem">Dipakai</span>' : ''}
+      ${!katSelectMode ? `
       <button class="icon-btn" onclick="editKat(${i})" data-tip="Edit Kategori">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
       </button>
       <button class="icon-btn danger" onclick="hapusKat(${i})" ${used?'disabled title="Sedang dipakai"':''}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-      </button>
+      </button>` : ''}
     </div>`;
   }).join('');
 }
@@ -1711,10 +1914,15 @@ function editKat(idx) {
   document.getElementById('kat-input').focus();
 }
 
-function hapusKat(idx) {
+async function hapusKat(idx) {
   const k = kategoriList[idx];
   if (barang.some(b=>b.kategori===k)) { showToast('Kategori sedang dipakai!','error'); return; }
-  if (!confirm(`Hapus kategori "${k}"?`)) return;
+  const okK = await showConfirm({
+    title: `Hapus kategori?`,
+    msg: `Kategori "${k}" akan dihapus permanen.`,
+    okLabel: 'Hapus', okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!okK) return;
   kategoriList.splice(idx,1);
   saveKat(); renderKatList(); updateKatSelect();
   showToast(`Kategori "${k}" dihapus`,'info');
@@ -1755,11 +1963,16 @@ function editTrans(type, idx) {
   openModal('m-edit-trans');
 }
 
-function hapusTrans(type, idx) {
+async function hapusTrans(type, idx) {
   if(!canDo('delete')) { showToast('Anda tidak punya izin hapus','error'); return; }
   const arr = type==='masuk' ? transMasuk : transKeluar;
   const t = arr[idx];
-  if(!confirm(`Hapus transaksi "${t.nama}" ${type==='masuk'?'+':'−'}${t.jml} pada ${t.tgl}?\n\nStok barang akan disesuaikan kembali.`)) return;
+  const okT = await showConfirm({
+    title: 'Hapus transaksi?',
+    msg: `${t.nama} ${type==='masuk'?'+':'−'}${t.jml} pada ${t.tgl}. Stok barang akan disesuaikan kembali.`,
+    okLabel: 'Hapus Transaksi', okColor: '#dc2626', iconType: 'danger'
+  });
+  if (!okT) return;
   // Kembalikan stok
   const b = barang.find(x=>x.kode===t.kode);
   if(b) { if(type==='masuk') b.stok-=t.jml; else b.stok+=t.jml; }
@@ -1798,6 +2011,19 @@ function saveTrans() {
 }
 
 // ══════════════════════════════════════════
+// SCROLL TO TOP
+// ══════════════════════════════════════════
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.addEventListener('scroll', () => {
+  const btn = document.getElementById('btn-scroll-top');
+  if (!btn) return;
+  if (window.scrollY > 300) btn.classList.add('show');
+  else btn.classList.remove('show');
+});
+
+// ══════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════
 applyTheme();
@@ -1806,4 +2032,4 @@ katAttr = JSON.parse(localStorage.getItem('sg2_katattr') || '{}');
 document.getElementById('login-year').textContent = new Date().getFullYear();
 restoreSession(); // pulihkan sesi login jika ada, agar tidak selalu kembali ke halaman login saat refresh
 window.addEventListener('resize',()=>{ if(document.getElementById('app').style.display!=='none') renderDashboard(); });
-document.querySelector('[onclick="openModal(\'m-adduser\')"]').setAttribute('onclick','openAddUser()');
+// (baris ini dihapus — elemen target tidak ada di HTML, menyebabkan crash saat load)

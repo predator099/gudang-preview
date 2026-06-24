@@ -416,7 +416,18 @@
         <span style="font-size:.75rem;color:var(--text2)">Preview: </span>
         <span id="kat-preview-badge" class="badge b-blue"></span>
       </div>
-      <div style="font-size:.75rem;font-weight:600;color:var(--text2);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.5px">Daftar Kategori</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <div style="font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">Daftar Kategori</div>
+        <div style="display:flex;gap:.35rem;align-items:center">
+          <span id="kat-sel-count" style="font-size:.75rem;color:var(--text3);display:none"></span>
+          <button id="kat-sel-all-btn" onclick="katSelectAll()" style="display:none;font-size:.75rem;padding:.2rem .6rem;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">Pilih Semua</button>
+          <button id="kat-del-sel-btn" onclick="hapusKatSelected()" style="display:none;font-size:.75rem;padding:.2rem .6rem;border-radius:6px;border:none;background:#dc2626;color:#fff;cursor:pointer;font-weight:600">Hapus Dipilih</button>
+          <button id="kat-sel-toggle-btn" onclick="katToggleSelectMode()" style="font-size:.75rem;padding:.22rem .65rem;border-radius:6px;border:1.5px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:.3rem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Pilih
+          </button>
+        </div>
+      </div>
       <div id="kat-list"></div>
       <div class="info-box" style="margin-top:.75rem">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -499,8 +510,30 @@
   </div>
 </div>
 
-<!-- TOAST -->
-<div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toast-msg"></span></div>
+<!-- TOAST STACK -->
+<div id="toast-stack" style="position:fixed;bottom:1.4rem;right:1.4rem;display:flex;flex-direction:column-reverse;gap:.5rem;z-index:9998;pointer-events:none;align-items:flex-end"></div>
+
+<!-- CUSTOM CONFIRM DIALOG -->
+<div class="mbd" id="m-confirm" style="z-index:9999">
+  <div class="modal" style="max-width:400px;padding:0;overflow:hidden;border-radius:16px">
+    <div style="padding:1.4rem 1.4rem .85rem;display:flex;align-items:flex-start;gap:.85rem">
+      <div id="confirm-icon-wrap" style="flex-shrink:0;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center">
+        <svg id="confirm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"></svg>
+      </div>
+      <div style="flex:1;min-width:0;padding-top:.1rem">
+        <div id="confirm-title" style="font-size:.94rem;font-weight:700;color:var(--text);margin-bottom:.3rem;letter-spacing:-.01em"></div>
+        <div id="confirm-msg" style="font-size:.82rem;color:var(--text2);line-height:1.55"></div>
+      </div>
+    </div>
+    <div id="confirm-list-wrap" style="display:none;margin:0 1.4rem .9rem;max-height:130px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem">
+      <div id="confirm-list" style="font-size:.79rem;color:var(--text2);line-height:1.9"></div>
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;padding:.8rem 1.4rem 1.2rem;border-top:1px solid var(--border)">
+      <button id="confirm-cancel-btn" onclick="confirmResolve(false)" style="padding:.45rem 1.1rem;border-radius:8px;font-size:.84rem;font-weight:600;border:1.5px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer;transition:all .15s">Batal</button>
+      <button id="confirm-ok-btn" onclick="confirmResolve(true)" style="padding:.45rem 1.25rem;border-radius:8px;font-size:.84rem;font-weight:600;border:none;cursor:pointer;transition:all .15s"></button>
+    </div>
+  </div>
+</div>
 
 <!-- EDIT TRANSAKSI -->
 <div class="mbd" id="m-edit-trans">
@@ -521,6 +554,11 @@
     <div class="mf"><button class="btn-cancel" onclick="closeModal('m-edit-trans')">Batal</button><button class="btn-save" onclick="saveTrans()">Simpan</button></div>
   </div>
 </div>
+
+<!-- SCROLL TO TOP -->
+<button id="btn-scroll-top" onclick="scrollToTop()" data-tip="Ke atas" aria-label="Scroll ke atas">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+</button>
 
 <!-- GLOBAL TOOLTIP -->
 <div id="g-tooltip"></div>
